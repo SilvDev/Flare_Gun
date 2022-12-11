@@ -1,6 +1,6 @@
 /*
 *	Flare Gun
-*	Copyright (C) 2021 Silvers
+*	Copyright (C) 2022 Silvers
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION 		"2.13"
+#define PLUGIN_VERSION 		"2.14"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,9 @@
 
 ========================================================================================
 	Change Log:
+
+2.14 (11-Dec-2022)
+	- Changes to fix compile warnings on SourceMod 1.11.
 
 2.13a (24-Feb-2021)
 	- Added Simplified Chinese and Traditional Chinese translations. Thanks to "HarryPotter" for providing. 
@@ -619,12 +622,12 @@ public void OnConfigsExecuted()
 	}
 }
 
-public void ConVarChanged_Allow(Handle convar, const char[] oldValue, const char[] newValue)
+void ConVarChanged_Allow(Handle convar, const char[] oldValue, const char[] newValue)
 {
 	IsAllowed();
 }
 
-public void ConVarChanged_Cvars(Handle convar, const char[] oldValue, const char[] newValue)
+void ConVarChanged_Cvars(Handle convar, const char[] oldValue, const char[] newValue)
 {
 	GetCvars();
 }
@@ -756,7 +759,7 @@ bool IsAllowedGameMode()
 	return true;
 }
 
-public void OnGamemode(const char[] output, int caller, int activator, float delay)
+void OnGamemode(const char[] output, int caller, int activator, float delay)
 {
 	if( strcmp(output, "OnCoop") == 0 )
 		g_iCurrentMode = 1;
@@ -811,7 +814,7 @@ void ResetPlugin()
 // ====================================================================================================
 //					EVENTS
 // ====================================================================================================
-public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
+void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 {
 	for( int i = 1; i <= MaxClients; i++ )
 	{
@@ -827,14 +830,14 @@ public void Event_RoundEnd(Event event, const char[] name, bool dontBroadcast)
 // ====================================================================================================
 // 					FLARE GUN MENU
 // ====================================================================================================
-public Action CmdFlareGun(int client, int args) // sm_flaregun command.
+Action CmdFlareGun(int client, int args) // sm_flaregun command.
 {
 	if( g_bCvarAllow )
 		MenuFlareGun(client, false);
 	return Plugin_Handled;
 }
 
-public int Menu_Status(int client, CookieMenuAction action, any info, char[] buffer, int maxlen) // sm_settings command.
+int Menu_Status(int client, CookieMenuAction action, any info, char[] buffer, int maxlen) // sm_settings command.
 {
 	switch(action)
 	{
@@ -843,6 +846,8 @@ public int Menu_Status(int client, CookieMenuAction action, any info, char[] buf
 		case CookieMenuAction_SelectOption:
 			MenuFlareGun(client, true);
 	}
+
+	return 0;
 }
 
 // Menu that appears when a user types !settings or !flaregun
@@ -940,7 +945,7 @@ void MenuFlareGun(int client, bool back)
 	menu.Display(client, 30);
 }
 
-public int Menu_FlareDisplay(Menu menu, MenuAction action, int param1, int param2)
+int Menu_FlareDisplay(Menu menu, MenuAction action, int param1, int param2)
 {
 	switch( action )
 	{
@@ -959,6 +964,8 @@ public int Menu_FlareDisplay(Menu menu, MenuAction action, int param1, int param
 		case MenuAction_End:
 			delete menu;
 	}
+
+	return 0;
 }
 
 void FlareGun(int client, int type)
@@ -1028,7 +1035,7 @@ void FlareGun(int client, int type)
 // 					WEAPON EQUIP
 // ====================================================================================================
 // Display hint when picking up grenade_launcher
-public Action OnWeaponEquip(int client, int weapon)
+void OnWeaponEquip(int client, int weapon)
 {
 	if( IsClientInGame(client) && GetClientTeam(client) == 2 )
 	{
@@ -1145,7 +1152,7 @@ void OnFrame_MakeNade(int entity)
 		}
 		else
 		{
-			AcceptEntityInput(entity, "Kill");
+			RemoveEntity(entity);
 			return;
 		}
 	}
@@ -1153,7 +1160,7 @@ void OnFrame_MakeNade(int entity)
 
 	if( g_iGrenadeLimit >= g_iCvarMaxTotal )
 	{
-		AcceptEntityInput(entity, "Kill");
+		RemoveEntity(entity);
 		ReloadAmmoGrenadeLauncher(client, true, true);
 		return;
 	}
@@ -1162,7 +1169,7 @@ void OnFrame_MakeNade(int entity)
 	int index = GetFlareIndex();
 	if( index == -1 )
 	{
-		AcceptEntityInput(entity, "Kill");
+		RemoveEntity(entity);
 		ReloadAmmoGrenadeLauncher(client, true, true);
 		return;
 	}
@@ -1227,7 +1234,7 @@ void OnFrame_MakeNade(int entity)
 	if( kill )
 	{
 		ReloadAmmoGrenadeLauncher(client, true, true);
-		AcceptEntityInput(entity, "Kill");
+		RemoveEntity(entity);
 		return;
 	}
 
@@ -1292,7 +1299,7 @@ void OnFrame_MakeNade(int entity)
 			ScaleVector(vVel, g_fCvarSpeedHoming / 10 );
 		else
 			ScaleVector(vVel, float(g_iCvarSpeed) / 10 );
-		AcceptEntityInput(entity, "kill");
+		RemoveEntity(entity);
 
 		// Create new projectile
 		g_bBlockHook = true;
@@ -1448,7 +1455,7 @@ void OnFrame_MakeNade(int entity)
 		SDKHook(entityindex, SDKHook_Touch, SDKHook_Touch_Callback);
 }
 
-public Action TimerDeleteFlares(Handle timer, any entity)
+Action TimerDeleteFlares(Handle timer, any entity)
 {
 	if( EntRefToEntIndex(entity) != INVALID_ENT_REFERENCE )
 	{
@@ -1458,13 +1465,15 @@ public Action TimerDeleteFlares(Handle timer, any entity)
 			{
 				g_iGrenadeLimit--;
 				DeleteAllFlares(i);
-				return;
+				return Plugin_Continue;
 			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
-public Action TimerDeleteExplode(Handle timer, any entity)
+Action TimerDeleteExplode(Handle timer, any entity)
 {
 	if( EntRefToEntIndex(entity) != INVALID_ENT_REFERENCE )
 	{
@@ -1475,13 +1484,15 @@ public Action TimerDeleteExplode(Handle timer, any entity)
 				CreateExplosion(entity, g_iFlareEntities[i][INDEX_TYPE]);
 				g_iGrenadeLimit--;
 				DeleteAllFlares(i);
-				return;
+				return Plugin_Continue;
 			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
-public Action TimerHomingThink(Handle timer, any index)
+Action TimerHomingThink(Handle timer, any index)
 {
 	int entity = g_iFlareEntities[index][INDEX_ENTITY];
 	if( IsValidEntRef(entity) == false )
@@ -1546,14 +1557,14 @@ public Action TimerHomingThink(Handle timer, any index)
 	return Plugin_Continue;
 }
 
-public bool TraceFilter(int entity, int contentsMask, any client)
+bool TraceFilter(int entity, int contentsMask, any client)
 {
 	if( entity == entity || entity == client )
 		return false;
 	return true;
 }
 
-public void SDKHook_Touch_Callback(int entity, int victim)
+void SDKHook_Touch_Callback(int entity, int victim)
 {
 	int client = GetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity");
 	int index = GetEntProp(entity, Prop_Data, "m_iHammerID");
@@ -1650,7 +1661,7 @@ public void SDKHook_Touch_Callback(int entity, int victim)
 	SDKHooks_TakeDamage(victim, client, client, bInfected ? float(g_iCvarHurtSI) : float(g_iCvarHurt), DMG_BURN, -1, NULL_VECTOR, vPos);
 }
 
-public void OnTouchSensor(int entity, int client)
+void OnTouchSensor(int entity, int client)
 {
 	if( client > 0 && client <= MaxClients )
 	{
@@ -1661,7 +1672,7 @@ public void OnTouchSensor(int entity, int client)
 			g_iGrenadeLimit--;
 			DeleteAllFlares(index);
 			SDKUnhook(entity, SDKHook_Touch, OnTouchSensor);
-			AcceptEntityInput(entity, "Kill");
+			RemoveEntity(entity);
 		}
 	}
 	else
@@ -1676,7 +1687,7 @@ public void OnTouchSensor(int entity, int client)
 			g_iGrenadeLimit--;
 			DeleteAllFlares(index);
 			SDKUnhook(entity, SDKHook_Touch, OnTouchSensor);
-			AcceptEntityInput(entity, "Kill");
+			RemoveEntity(entity);
 		}
 	}
 }
@@ -1713,11 +1724,13 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 				if( strcmp(sClass[7], "grenade_launcher") == 0 )
 				{
 					LaunchPlayer(client);
-					return;
+					return Plugin_Continue;
 				}
 			}
 		}
 	}
+
+	return Plugin_Continue;
 }
 
 void LaunchPlayer(int client)
@@ -1735,7 +1748,7 @@ void LaunchPlayer(int client)
 				entity = EntRefToEntIndex(entity);
 				CreateExplosion(entity, TYPE_REMOTE); // Explosion and damage
 				g_iGrenadeLimit--;
-				AcceptEntityInput(entity, "kill");
+				RemoveEntity(entity);
 			}
 			g_iSticky[client][i] = 0;
 		}
@@ -1748,7 +1761,7 @@ void LaunchPlayer(int client)
 		iNum = 0;
 
 		float vPos[3], vClientPos[3], vClientVel[3];
-		float vFinalVel[3], vForce, fDistance, fRange;
+		float vFinalVel[3], vForce, fDistance;//, fRange;
 		int iStickyCount;
 
 		GetClientAbsOrigin(client, vClientPos);										// Player position
@@ -1769,7 +1782,7 @@ void LaunchPlayer(int client)
 				fDistance = GetVectorDistance(vPos, vClientPos);					// Check player in range to sticky bomb
 				if( fDistance <= g_fCvarDistance )
 				{
-					fRange+= fDistance;
+					// fRange+= fDistance;
 					iStickyCount += 1;
 
 					MakeVectorFromPoints(vPos, vClientPos, vPos);					// Vector from grenade to client position
@@ -1786,7 +1799,7 @@ void LaunchPlayer(int client)
 				}
 
 				g_iSticky[client][i] = 0;
-				AcceptEntityInput(entity, "kill");
+				RemoveEntity(entity);
 			}
 		}
 
@@ -1809,7 +1822,7 @@ void LaunchPlayer(int client)
 	}
 }
 
-public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
+Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
 {
 	// if( damagetype == 32 ) // #define DMG_FALL (1<<5)
 	if( damagetype & (1<<5) ) // #define DMG_FALL (1<<5)
@@ -1820,7 +1833,7 @@ public Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &dam
 
 	return Plugin_Continue;
 }
-public void OnPreThink(int client)
+void OnPreThink(int client)
 {
 	if( GetEntityFlags(client) & FL_ONGROUND )
 	{
@@ -2091,7 +2104,7 @@ void DeleteAllFlares(int index = -1)
 		if( IsValidEntRef(entity) )
 		{
 			StopSound(entity, SNDCHAN_AUTO, SOUND_FIRE);
-			AcceptEntityInput(entity, "Kill");
+			RemoveEntity(entity);
 		}
 
 		for( int i = 1; i < MAX_PROJECTILES; i++ )
@@ -2102,7 +2115,7 @@ void DeleteAllFlares(int index = -1)
 				g_iFlareEntities[i][x] = 0;
 
 				if( IsValidEntRef(entity) )
-					AcceptEntityInput(entity, "Kill");
+					RemoveEntity(entity);
 			}
 
 			g_iFlareEntities[i][MAX_ENTITIES -1] = 0;
@@ -2116,7 +2129,7 @@ void DeleteAllFlares(int index = -1)
 		if( IsValidEntRef(entity) )
 		{
 			StopSound(entity, SNDCHAN_AUTO, SOUND_FIRE);
-			AcceptEntityInput(entity, "Kill");
+			RemoveEntity(entity);
 		}
 
 		for( int i = 0; i < MAX_ENTITIES -2; i++ )
@@ -2125,7 +2138,7 @@ void DeleteAllFlares(int index = -1)
 			g_iFlareEntities[index][i] = 0;
 
 			if( IsValidEntRef(entity) )
-				AcceptEntityInput(entity, "Kill");
+				RemoveEntity(entity);
 		}
 
 		g_iFlareEntities[index][MAX_ENTITIES -1] = 0;
@@ -2174,7 +2187,7 @@ void StaggerClient(int iUserID, const float fPos[3])
 	Format(sBuffer, sizeof(sBuffer), "GetPlayerFromUserID(%d).Stagger(Vector(%d,%d,%d))", iUserID, RoundFloat(fPos[0]), RoundFloat(fPos[1]), RoundFloat(fPos[2]));
 	SetVariantString(sBuffer);
 	AcceptEntityInput(iScriptLogic, "RunScriptCode");
-	AcceptEntityInput(iScriptLogic, "Kill");
+	RemoveEntity(iScriptLogic);
 }
 
 void CPrintToChat(int client, char[] message, any ...)
