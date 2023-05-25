@@ -1,6 +1,6 @@
 /*
 *	Flare Gun
-*	Copyright (C) 2022 Silvers
+*	Copyright (C) 2023 Silvers
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION 		"2.14"
+#define PLUGIN_VERSION 		"2.15"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,10 @@
 
 ========================================================================================
 	Change Log:
+
+2.15 (25-May-2023)
+	- Fixed cvars "l4d2_flare_gun_prefs" and "l4d2_flare_gun_type_default" not being followed. Thanks to "Voevoda" for reporting.
+	- Fixed rare invalid entity error. Thanks to "Voevoda" for reporting.
 
 2.14 (11-Dec-2022)
 	- Changes to fix compile warnings on SourceMod 1.11.
@@ -378,7 +382,7 @@ public void OnPluginStart()
 	g_hCvarTimeSticky =		CreateConVar(	"l4d2_flare_gun_time_sticky",		"20.0",			"How many seconds before removing Sticky Flare projectiles.", CVAR_FLAGS );
 	g_hCvarTimeTimed =		CreateConVar(	"l4d2_flare_gun_time_timed",		"5.0",			"How many seconds before removing Timed projectiles.", CVAR_FLAGS );
 	g_hCvarType =			CreateConVar(	"l4d2_flare_gun_types",				"239",			"Which types can players use (admins can use all). 1=Stock, 2=Flare, 4=Bounce, 8=Sticky Flare, 16=Jump, 32=Remote Bomb, 64=Sticky Bomb Timed, 128=Sensor Bomb, 256=Homing Rocket, 511=All.", CVAR_FLAGS );
-	g_hCvarDefault =		CreateConVar(	"l4d2_flare_gun_type_default",		"2",			"The default type of grenade launcher int players receive. Same as types but only use 1 value, do not add up.", CVAR_FLAGS );
+	g_hCvarDefault =		CreateConVar(	"l4d2_flare_gun_type_default",		"2",			"The default type of grenade launcher new players receive. Same as types but only use 1 value, do not add up.", CVAR_FLAGS );
 	CreateConVar(							"l4d2_flare_gun_version",			PLUGIN_VERSION,	"Flare Gun plugin version.", FCVAR_NOTIFY|FCVAR_DONTRECORD);
 	AutoExecConfig(true,					"l4d2_flare_gun");
 
@@ -569,17 +573,17 @@ void DefaultCheck(int client)
 	char sCookie[3];
 	GetClientCookie(client, g_hCookie, sCookie, sizeof(sCookie));
 
-	if( sCookie[0] == 0 )
+	if( !g_bCvarPrefs || sCookie[0] == 0 )
 	{
 		IntToString(g_iCvarDefault, sCookie, sizeof(sCookie));
 		SetClientCookie(client, g_hCookie, sCookie);
 		g_iType[client] = g_iCvarDefault;
 	}
-	else
+	else if( g_bCvarPrefs )
 	{
 		int type = StringToInt(sCookie);
 
-		if( access != 2 )
+		if( access != 2 && g_bCvarPrefs )
 		{
 			if( (type == TYPE_DEFAULT	&& !(g_iCvarType & ENUM_DEFAULT)) ||
 				(type == TYPE_FLARE		&& !(g_iCvarType & ENUM_FLARE)) ||
@@ -596,7 +600,9 @@ void DefaultCheck(int client)
 				g_iType[client] = type;
 		}
 		else
+		{
 			g_iType[client] = type;
+		}
 	}
 
 	if( access )
@@ -1037,10 +1043,10 @@ void FlareGun(int client, int type)
 // Display hint when picking up grenade_launcher
 void OnWeaponEquip(int client, int weapon)
 {
-	if( IsClientInGame(client) && GetClientTeam(client) == 2 )
+	if( IsClientInGame(client) && GetClientTeam(client) == 2 && IsValidEntity(weapon) )
 	{
 		static char sWeapon[128];
-		GetEdictClassname(weapon, sWeapon, sizeof(sWeapon));
+		GetEntityClassname(weapon, sWeapon, sizeof(sWeapon));
 		if( strcmp(sWeapon[7], "grenade_launcher") == 0 )
 		{
 			if( g_bCvarPrefs == false )
@@ -1455,7 +1461,7 @@ void OnFrame_MakeNade(int entity)
 		SDKHook(entityindex, SDKHook_Touch, SDKHook_Touch_Callback);
 }
 
-Action TimerDeleteFlares(Handle timer, any entity)
+Action TimerDeleteFlares(Handle timer, int entity)
 {
 	if( EntRefToEntIndex(entity) != INVALID_ENT_REFERENCE )
 	{
@@ -1473,7 +1479,7 @@ Action TimerDeleteFlares(Handle timer, any entity)
 	return Plugin_Continue;
 }
 
-Action TimerDeleteExplode(Handle timer, any entity)
+Action TimerDeleteExplode(Handle timer, int entity)
 {
 	if( EntRefToEntIndex(entity) != INVALID_ENT_REFERENCE )
 	{
@@ -1492,7 +1498,7 @@ Action TimerDeleteExplode(Handle timer, any entity)
 	return Plugin_Continue;
 }
 
-Action TimerHomingThink(Handle timer, any index)
+Action TimerHomingThink(Handle timer, int index)
 {
 	int entity = g_iFlareEntities[index][INDEX_ENTITY];
 	if( IsValidEntRef(entity) == false )
@@ -1557,7 +1563,7 @@ Action TimerHomingThink(Handle timer, any index)
 	return Plugin_Continue;
 }
 
-bool TraceFilter(int entity, int contentsMask, any client)
+bool TraceFilter(int entity, int contentsMask, int client)
 {
 	if( entity == entity || entity == client )
 		return false;
