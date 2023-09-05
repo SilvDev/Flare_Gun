@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION 		"2.15"
+#define PLUGIN_VERSION 		"2.16"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,9 @@
 
 ========================================================================================
 	Change Log:
+
+2.16 (05-Sep-2023)
+	- Fixed the plugin stumbling players when the stumble option is turned off. Thanks to "Proaxel" for reporting.
 
 2.15 (25-May-2023)
 	- Fixed cvars "l4d2_flare_gun_prefs" and "l4d2_flare_gun_type_default" not being followed. Thanks to "Voevoda" for reporting.
@@ -355,7 +358,7 @@ public void OnPluginStart()
 	g_hCvarGravity =		CreateConVar(	"l4d2_flare_gun_gravity",			"0.4",			"Changes the projectile gravity, negative numbers make it fly upward!", CVAR_FLAGS );
 	g_hCvarHurt =			CreateConVar(	"l4d2_flare_gun_hurt",				"10",			"0=Off, Hurt survivors this much and ignite zombies/infected/explosives when bouncing. This enables l4d2_flare_gun_hurt_special.", CVAR_FLAGS, true, 0.0, true, 100.0 );
 	g_hCvarHurtSI =			CreateConVar(	"l4d2_flare_gun_hurt_special",		"10",			"Hurt special infected this much when they touch the flare. Damage is limited to once per second, same as above.", CVAR_FLAGS, true, 0.0, true, 100.0 );
-	g_hCvarHurtStumble =	CreateConVar(	"l4d2_flare_gun_hurt_stumble",		"1",			"Stumble survivors/special infected in explosions (does not affect stock types).", CVAR_FLAGS, true, 0.0, true, 100.0 );
+	g_hCvarHurtStumble =	CreateConVar(	"l4d2_flare_gun_hurt_stumble",		"1",			"Stumble survivors/special infected in explosions (does not affect stock types).", CVAR_FLAGS, true, 0.0, true, 1.0 );
 	g_hCvarLight =			CreateConVar(	"l4d2_flare_gun_light",				"1",			"Turn on/off the attached light_dynamic glow.", CVAR_FLAGS );
 	g_hCvarLightCols =		CreateConVar(	"l4d2_flare_gun_light_color",		"200 20 15",	"The light color. Three values between 0-255 separated by spaces. RGB Color255 - Red Green Blue.", CVAR_FLAGS );
 	g_hCvarMax =			CreateConVar(	"l4d2_flare_gun_max",				"3",			"Max simultaneous flares a player can shoot.", CVAR_FLAGS, true, 1.0, true, float(MAX_PROJECTILES));
@@ -1839,6 +1842,7 @@ Action OnTakeDamage(int victim, int &attacker, int &inflictor, float &damage, in
 
 	return Plugin_Continue;
 }
+
 void OnPreThink(int client)
 {
 	if( GetEntityFlags(client) & FL_ONGROUND )
@@ -1853,6 +1857,7 @@ void OnPreThink(int client)
 	}
 }
 
+int g_iEntityExplosion;
 void CreateExplosion(int client, int type)
 {
 	float vPos[3];
@@ -1943,6 +1948,17 @@ void CreateExplosion(int client, int type)
 
 	// Create explosion, kills infected/special infected and credits owner for kill. Also pushes physics entities.
 	entity = CreateEntityByName("env_explosion");
+	g_iEntityExplosion = EntIndexToEntRef(entity);
+
+	// Block explosion entity causing stumble
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame(i) )
+		{
+			SDKHook(i, SDKHook_OnTakeDamage, OnTakeExplosion);
+		}
+	}
+
 	FloatToString(fDamage, sTemp, sizeof(sTemp));
 	DispatchKeyValue(entity, "iMagnitude", sTemp);
 	DispatchKeyValue(entity, "spawnflags", "1916");
@@ -1952,6 +1968,14 @@ void CreateExplosion(int client, int type)
 	TeleportEntity(entity, vPos, NULL_VECTOR, NULL_VECTOR);
 	SetEntPropEnt(entity, Prop_Send, "m_hOwnerEntity", owner);
 	AcceptEntityInput(entity, "Explode");
+
+	for( int i = 1; i <= MaxClients; i++ )
+	{
+		if( IsClientInGame(i) )
+		{
+			SDKUnhook(i, SDKHook_OnTakeDamage, OnTakeExplosion);
+		}
+	}
 
 
 	// Hurt survivors with scaled damage, except don't let the owner hurt himself (so the teleporting with the jump mode works).
@@ -1979,6 +2003,16 @@ void CreateExplosion(int client, int type)
 		case 1:		EmitSoundToAll(SOUND_EXPLODE4, entity, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
 		case 2:		EmitSoundToAll(SOUND_EXPLODE5, entity, SNDCHAN_AUTO, SNDLEVEL_NORMAL, SND_NOFLAGS, SNDVOL_NORMAL, SNDPITCH_NORMAL, -1, NULL_VECTOR, NULL_VECTOR, true, 0.0);
 	}
+}
+
+Action OnTakeExplosion(int victim, int &attacker, int &inflictor, float &damage, int &damagetype)
+{
+	if( inflictor > MaxClients && EntIndexToEntRef(inflictor) == g_iEntityExplosion )
+	{
+		return Plugin_Handled;
+	}
+
+	return Plugin_Continue;
 }
 
 
