@@ -1,6 +1,6 @@
 /*
 *	Flare Gun
-*	Copyright (C) 2023 Silvers
+*	Copyright (C) 2024 Silvers
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION 		"2.16"
+#define PLUGIN_VERSION 		"2.17"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,10 @@
 
 ========================================================================================
 	Change Log:
+
+2.17 (21-Apr-2024)
+	- Fixed losing reserved ammo if the clip size was increased.
+	- Fixed the Grenade Launcher having unlimited ammo with certain cvar settings.
 
 2.16 (05-Sep-2023)
 	- Fixed the plugin stumbling players when the stumble option is turned off. Thanks to "Proaxel" for reporting.
@@ -326,6 +330,8 @@ public void OnPluginStart()
 	g_sdkStagger = EndPrepSDKCall();
 	if( g_sdkStagger == null )
 		SetFailState("Could not prep the 'CTerrorPlayer::OnStaggered' function.");
+
+	delete hGameData;
 	*/
 
 
@@ -1118,8 +1124,12 @@ void ReloadAmmoGrenadeLauncher(int client, bool reload, bool ammo)
 			{
 				if( reload == true && ammo == false )
 				{
+					if( GetEntProp(iWeapon, Prop_Send, "m_iClip1", 1) == 0 )
+					{
+						SetEntData(client, g_iAmmoOffset + 68, iAmmo -1);
+					}
+
 					SetEntProp(iWeapon, Prop_Send, "m_iClip1", 1, 1);
-					SetEntData(client, g_iAmmoOffset + 68, iAmmo -1);
 				}
 				else if( reload == false && ammo == true )
 				{
@@ -1127,6 +1137,11 @@ void ReloadAmmoGrenadeLauncher(int client, bool reload, bool ammo)
 				}
 				else
 				{
+					if( GetEntProp(iWeapon, Prop_Send, "m_iClip1", 1) == 0 )
+					{
+						SetEntData(client, g_iAmmoOffset + 68, iAmmo -1);
+					}
+
 					SetEntProp(iWeapon, Prop_Send, "m_iClip1", 1, 1);
 				}
 			}
