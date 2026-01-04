@@ -1,6 +1,6 @@
 /*
 *	Flare Gun
-*	Copyright (C) 2024 Silvers
+*	Copyright (C) 2026 Silvers
 *
 *	This program is free software: you can redistribute it and/or modify
 *	it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 
 
-#define PLUGIN_VERSION 		"2.17"
+#define PLUGIN_VERSION 		"2.18"
 
 /*======================================================================================
 	Plugin Info:
@@ -31,6 +31,9 @@
 
 ========================================================================================
 	Change Log:
+
+2.18 (04-Jan-2026)
+	- Fixed the plugin not inflicting damage on Special Infected. Thanks to "swiftswing1" for reporting.
 
 2.17 (21-Apr-2024)
 	- Fixed losing reserved ammo if the clip size was increased.
@@ -1929,17 +1932,25 @@ void CreateExplosion(int client, int type)
 
 		for( int i = 1; i <= MaxClients; i++ )
 		{
-			if( IsClientInGame(i) && GetClientTeam(i) == 2 && IsPlayerAlive(i) )
+			if( IsClientInGame(i) && IsPlayerAlive(i) )
 			{
 				GetClientAbsOrigin(i, vPosFF);
 				fDistance = GetVectorDistance(vPos, vPosFF);
 
 				if( fDistance <= g_fCvarDistance )
 				{
-					if( i == owner )
-						fHurt = fDamage * g_fCvarDamageFFSelf;
+					if( GetClientTeam(i) == 2 )
+					{
+						if( i == owner )
+							fHurt = fDamage * g_fCvarDamageFFSelf;
+						else
+							fHurt = fDamage * g_fCvarDamageFFScale;
+					}
 					else
-						fHurt = fDamage * g_fCvarDamageFFScale;
+					{
+						fHurt = fDamage;
+					}
+
 					fDistance = 100 * fDistance / g_fCvarDistance;
 					fDistance = fHurt * fDistance / 100;
 					fHurt = fHurt - fDistance;
@@ -1959,6 +1970,7 @@ void CreateExplosion(int client, int type)
 			}
 		}
 	}
+
 
 
 	// Create explosion, kills infected/special infected and credits owner for kill. Also pushes physics entities.
@@ -1993,7 +2005,7 @@ void CreateExplosion(int client, int type)
 	}
 
 
-	// Hurt survivors with scaled damage, except don't let the owner hurt himself (so the teleporting with the jump mode works).
+	// Hurt special infected/survivors with scaled damage, except don't let the owner hurt himself (so the teleporting with the jump mode works).
 	if( bSetDamage == true )
 	{
 		for( int i = 1; i <= MaxClients; i++ )
